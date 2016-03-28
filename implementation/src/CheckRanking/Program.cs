@@ -43,15 +43,17 @@ namespace WelfareSearchingTool
                         }
                         try
                         {
-                            var resut = gongzu2.Start();
+                            gongzu2.Start();
                             if (!string.IsNullOrEmpty(gongzu2.Error))
                             {
                                 File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "exception.log"), gongzu2.Error);
                             }
                             else
                             {
-                                string json = Newtonsoft.Json.JsonConvert.SerializeObject(resut);
+                                string json = Newtonsoft.Json.JsonConvert.SerializeObject(gongzu2.ResultForGongzu);
                                 File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "message.json"), json);
+                                string json2 = Newtonsoft.Json.JsonConvert.SerializeObject(gongzu2.ResultForAnju??new MessageForAnju());
+                                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "message_an.json"), json2);
                             }
                         }
                         catch (Exception ex)

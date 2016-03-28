@@ -1,4 +1,5 @@
 ﻿using CheckRanking;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -57,7 +58,11 @@ namespace WelfareSearchingTool
             {
                 File.Delete(m_ResultPath);
             }
-            ProcessStartInfo info = new ProcessStartInfo("CheckRanking.exe", "randCode");
+            if (File.Exists(m_ResultPath2))
+            {
+                File.Delete(m_ResultPath2);
+            }
+            ProcessStartInfo info = new ProcessStartInfo(@"CheckRanking.exe", "randCode");
             info.WindowStyle = ProcessWindowStyle.Hidden;
             var process = Process.Start(info);
             process.WaitForExit();
@@ -76,6 +81,7 @@ namespace WelfareSearchingTool
         }
 
         private readonly string m_ResultPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "message.json");
+        private readonly string m_ResultPath2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "message_an.json");
 
         private void CallResourceForChecking()
         {
@@ -83,37 +89,19 @@ namespace WelfareSearchingTool
 
             Task.Factory.StartNew(() =>
             {
-                ProcessStartInfo info = new ProcessStartInfo("CheckRanking.exe", string.Format("check {0} {1} {2}", tbUserName.Text, tbPassword.Text, tbRandCode.Text));
+                ProcessStartInfo info = new ProcessStartInfo(@"CheckRanking.exe", string.Format("check {0} {1} {2}", tbUserName.Text, tbPassword.Text, tbRandCode.Text));
                 info.WindowStyle = ProcessWindowStyle.Hidden;
                 var process = Process.Start(info);
                 process.WaitForExit();
                 resultCode = (ResultCodeType)process.ExitCode;
+
             }).ContinueWith((t) =>
             {
                 btnCheck.Text = "查询排名";
-                if (File.Exists(m_ResultPath))
-                {
-                    var result = Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(File.ReadAllText(m_ResultPath), new
-                    {
-                        Name = string.Empty,
-                        RankingNum = 0,
-                        Id = string.Empty,
-                        RecvNum = string.Empty,
-                        RendNum = 0,
-                        Area = string.Empty
-                    });
-                    tbResult_Name.Text = result.Name;
-                    tbResult_RankingNum.Text = result.RankingNum.ToString();
-                    tbResult_Id.Text = result.Id;
-                    tbResult_Area.Text = result.Area;
-                    tbResult_recvNum.Text = result.RecvNum;
-                    SaveRanking(result.RankingNum);
-                    if (cbIsSave.Checked)
-                    {
-                        SaveUser();
-                    }
-                }
-                else
+                var succ = AssignGongzu(resultCode);
+                var succ2 = AssignAnju(resultCode);
+                succ = succ || succ2;
+                if (!succ)
                 {
                     switch (resultCode)
                     {
@@ -133,20 +121,91 @@ namespace WelfareSearchingTool
                             MessageBox.Show("读取数据失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             break;
                     }
-                    
                 }
-                CallResource();
+                    CallResource();
                 btnCheck.Enabled = true;
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         private void pbRandCode_Click(object sender, EventArgs e)
         {
-            this.Text = "查询公租房排名信息 - 加载中";
+            this.Text = "查询排名信息 - 加载中";
             CallResource();
-            this.Text = "查询公租房排名信息";
+            this.Text = "查询排名信息";
         }
-
+        private bool AssignAnju(ResultCodeType resultCode)
+        {
+            if (File.Exists(m_ResultPath2))
+            {
+                var result = JsonConvert.DeserializeAnonymousType(File.ReadAllText(m_ResultPath2), new
+                {
+                    Name = string.Empty,
+                    Half = string.Empty,
+                    OtherName = string.Empty,
+                    Rank = 0,
+                    Status = string.Empty,
+                    BillNo = string.Empty
+                });
+                if (!string.IsNullOrEmpty(result.Name))
+                {
+                    tb_an_Name.Text = result.Name;
+                    tbHalf.Text = result.Half;
+                    tbOther.Text = result.OtherName;
+                    tb_an_rank.Text = result.Rank.ToString();
+                    tbBillNo.Text = result.BillNo;
+                    return true;
+                }
+            }
+            return false;
+        }
+        private bool AssignGongzu(ResultCodeType resultCode)
+        {
+            if (File.Exists(m_ResultPath))
+            {
+                var result = Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(File.ReadAllText(m_ResultPath), new
+                {
+                    Name = string.Empty,
+                    RankingNum = 0,
+                    Id = string.Empty,
+                    RecvNum = string.Empty,
+                    RendNum = 0,
+                    Area = string.Empty
+                });
+                tbResult_Name.Text = result.Name;
+                tbResult_RankingNum.Text = result.RankingNum.ToString();
+                tbResult_Id.Text = result.Id;
+                tbResult_Area.Text = result.Area;
+                tbResult_recvNum.Text = result.RecvNum;
+                SaveRanking(result.RankingNum);
+                if (cbIsSave.Checked)
+                {
+                    SaveUser();
+                }
+                return true;
+            }
+            //else
+            //{
+            //    switch (resultCode)
+            //    {
+            //        case ResultCodeType.UserNameOrPasswordFailed:
+            //            MessageBox.Show("用户名或密码有误", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //            break;
+            //        case ResultCodeType.PageLoadFailed:
+            //            MessageBox.Show("页面无法加载成功，请重试", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //            break;
+            //        case ResultCodeType.CannotCatchingMessage:
+            //            MessageBox.Show("无法读取到排名信息，可能系统改版，请跟作者反馈问题", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //            break;
+            //        case ResultCodeType.ValidateCodeFailed:
+            //            MessageBox.Show("验证码错误", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //            break;
+            //        default:
+            //            MessageBox.Show("读取数据失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            //            break;
+            //    }
+            //}
+            return false;
+        }
         private static string _Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "user");
 
         private void SaveUser()
@@ -166,7 +225,7 @@ namespace WelfareSearchingTool
 
         private void btnCheck_Click(object sender, EventArgs e)
         {
-            
+
             btnCheck.Text = "查询中";
             btnCheck.Enabled = false;
             CallResourceForChecking();

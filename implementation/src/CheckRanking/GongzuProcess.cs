@@ -32,20 +32,21 @@ namespace WelfareSearchingTool
         public HttpClientHandler Handler { get; set; }
         public HttpClient Client { get; set; }
 
-        public Message Start()
+        public Message ResultForGongzu { get; private set; }
+        public MessageForAnju ResultForAnju { get; private set; }
+        public void Start()
         {
             try
             {
                 var t = StartAsync();
                 t.Wait();
-                return t.Result;
+
             }
             catch (AggregateException ex)
             {
                 Error = ex.InnerException.Message + Environment.NewLine + ex.InnerException.StackTrace;
 
             }
-            return null;
         }
 
         public async Task GenerationRandCodeAsync()
@@ -54,13 +55,13 @@ namespace WelfareSearchingTool
             await GetRandCodeAsync();
         }
 
-        private async Task<Message> StartAsync()
+        private async Task StartAsync()
         {
             await PostLogin();
             await VisitPlatform();
-            var result = await VisitRankingPage();
+            ResultForGongzu = await VisitRankingPage();
+            ResultForAnju = await VisitRankingPageForAnjuFang();
             await Logout();
-            return result;
         }
 
         private HttpClient InitClient()
@@ -214,6 +215,38 @@ namespace WelfareSearchingTool
             throw new WebException("无法成功读取到排名信息");
         }
 
+        readonly static Regex _DataRegexForAnju = new Regex(@"申请表编号[\s|\S]+?<td[\s\S]+?>(?<BillNo>\w+?)<[\s\S]+?申请人姓名[\s|\S]+?<td.*?>\s*(?<Name>.+)<[\s|\S]+?配偶姓名[\s|\S]+?<td.*?>(?<Half>.+)<[\s|\S]+?其他共同申请人姓名[\s|\S]+?<td.*?>(?<Other>.+)<[\s\S]+?轮候排序[\s\S]+?<td.*?>(?<Rank>\d+)[\s|\S]+?认购状态[\s\S]+?<td><.+?>(?<Status>.+?)<", RegexOptions.Compiled);
+        private async Task<MessageForAnju> VisitRankingPageForAnjuFang()
+        {
+            var response = await Client.GetAsync("http://61.144.226.2:8003/szsfzx/ajfsubscribe/subscribeNotice.jsp");
+            var responseContent = await response.Content.ReadAsStringAsync();
+            //if (responseContent.Contains("安居型商品房申购重要提示"))
+            //    return null;
+
+
+            response = await Client.PostAsync("http://61.144.226.2:8003/szsfzx/ajf/AjfAction.do?method=toSubscribeSearch",
+                new FormUrlEncodedContent(new List<KeyValuePair<string, string>>{
+                new KeyValuePair<string, string>("from","home")
+            }));
+            if (!response.IsSuccessStatusCode)
+                return null;
+            string content = await response.Content.ReadAsStringAsync();
+            var m = _DataRegexForAnju.Match(content);
+            if (m.Success)
+            {
+                return new MessageForAnju
+                {
+                    Name = m.Groups["Name"].Value,
+                    Half = m.Groups["Half"].Value,
+                    BillNo = m.Groups["BillNo"].Value,
+                    OtherName = m.Groups["Other"].Value,
+                    Rank = int.Parse(m.Groups["Rank"].Value),
+                    Status = m.Groups["Status"].Value
+                };
+            }
+            return null;
+        }
+
         private async Task Logout()
         {
             var response = await Client.GetAsync("http://bzflh.szjs.gov.cn/TylhW/logout.jsp");
@@ -299,5 +332,15 @@ namespace WelfareSearchingTool
         public string RecvNum { get; set; }
         public int RendNum { get; set; }
         public string Area { get; set; }
+    }
+
+    public class MessageForAnju
+    {
+        public string Name { get; set; }
+        public string Half { get; set; }
+        public string OtherName { get; set; }
+        public int Rank { get; set; }
+        public string Status { get; set; }
+        public string BillNo { get; set; }
     }
 }
